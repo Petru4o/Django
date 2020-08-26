@@ -1,19 +1,42 @@
+from PIL import Image
+import sys
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
+from io import BytesIO
+from django.core.files.uploadedfile import InMemoryUploadedFile
 
 User = get_user_model()
 
+class MinResolutionErrorException(Exception):
+    pass
 
-# **********
-# 1 Category
-# 2 Product
-# 3 CartProduct
-# 4 Cart
-# 5 Order
-# 6 Customer
-# 7 Specific
+class MaxResolutionErrorException(Exception):
+    pass
+
+
+
+
+class LatestProductsManager:
+
+    @staticmethod
+    def get_products_for_main_page(self, *args, **kwargs):
+        with_respect_to = kwargs.get('with_respect_to')
+        products = []
+        ct_models = ContentType.objects.filter(model__in=args)
+        for ct_model in ct_models:
+            model_products = ct_model.model_class().base_manager.all().order_by('-id')[:5]
+            products.extend(model_products)
+        if with_respect_to:
+            ct_model = ContentType.objects.filter(model=with_respect_to)
+            if ct_model.exists():
+                if with_respect_to in args:
+                    return sorted(products, key=lambda x: x.__class__._meta.model_name.startswith(with_respect_to), reverse=True)
+        return products
+
+class LatestProducts:
+    objects = LatestProductsManager()
 
 
 class Category(models.Model):
@@ -25,6 +48,11 @@ class Category(models.Model):
 
 
 class Product(models.Model):
+
+    VALID_RESOLUTION = (400, 400)
+    MAX_RESOLUTION = (1000, 1000)
+    MAX_IMAGE_SIZE = 3145728
+
     class Meta:
         abstract = True
 
@@ -37,6 +65,26 @@ class Product(models.Model):
 
     def __str__(self):
         return self.title
+
+    def save(self,*args,**kwargs):
+        image = self.image
+        img = Image.open(image)
+        min_height, min_width = self.VALID_RESOLUTION
+        max_height, max_width = self.MAX_RESOLUTION
+        if img.height < min_height or img.width < min_width:
+            raise MinResolutionErrorException('Image less  min resolution')
+        if img.height > max_height or img.width > max_width:
+            raise MaxResolutionErrorException('Image more  max resolution')
+        new_img = img.convert('RGB')
+        resized_new_img = new_img.resize((400, 400), Image.ANTIALIAS)
+        filestream = BytesIO()
+        resized_new_img.save(filestream, 'JPEG', quality=90)
+        name_ = '{}.{}'.format(*self.image.name.split('.'))
+        filestream.seek(0)
+        self.image = InMemoryUploadedFile(
+            filestream,'ImageField', name_, 'jpeg/image', sys.getsizeof(filestream), None
+        )
+        super().save(*args, **kwargs)
 
 
 class CartProduct(models.Model):
@@ -94,3 +142,4 @@ class Smartphone(Product):
 
     def __str__(self):
         return  "{} : {}".format(self.category.name, self.title)
+
