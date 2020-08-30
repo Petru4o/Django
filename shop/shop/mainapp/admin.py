@@ -1,15 +1,32 @@
 from django.contrib import admin
 from django.forms import ModelChoiceField, ModelForm, ValidationError
 from .models import *
-from  django.utils.safestring import mark_safe
+from django.utils.safestring import mark_safe
 from PIL import Image
+
+
+class SmartPhoneAdminForm(ModelForm):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        instance = kwargs.get('instance')
+        if not instance.sd:
+            self.fields['sd_volume_max'].widget.attrs.update({
+                'readonly': True, 'style': 'background : lightgray'
+            })
+
+    def clean(self):
+        if not self.cleaned_data['sd']:
+            self.cleaned_data['sd_volume_max'] = None
+        return self.cleaned_data
 
 
 class NotebookAdminForm(ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['image'].help_text = mark_safe('<span style="color:red; font-size:14px;">If you upload bigger {}x{} image, it will be cut</span>').format(
+        self.fields['image'].help_text = mark_safe(
+            '<span style="color:red; font-size:14px;">If you upload bigger {}x{} image, it will be cut</span>').format(
             *Product.MAX_RESOLUTION)
 
     def clean_image(self):
@@ -36,6 +53,8 @@ class NotebookAdmin(admin.ModelAdmin):
 
 
 class SmartphoneAdmin(admin.ModelAdmin):
+    change_form_template = 'admin.html'
+    form = SmartPhoneAdminForm
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "category":
