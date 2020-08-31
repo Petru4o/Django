@@ -8,22 +8,24 @@ from io import BytesIO
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.urls import reverse
 
-
 User = get_user_model()
+
+
+def get_models_for_count(*model_names):
+    return [models.Count(model_name) for model_name in model_names]
+
 
 def get_product_url(obj, viewname):
     ct_model = obj.__class__._meta.model_name
     return reverse(viewname, kwargs={'ct_model': ct_model, 'slug': obj.slug})
 
 
-
 class MinResolutionErrorException(Exception):
     pass
 
+
 class MaxResolutionErrorException(Exception):
     pass
-
-
 
 
 class LatestProductsManager:
@@ -40,23 +42,47 @@ class LatestProductsManager:
             ct_model = ContentType.objects.filter(model=with_respect_to)
             if ct_model.exists():
                 if with_respect_to in args:
-                    return sorted(products, key=lambda x: x.__class__._meta.model_name.startswith(with_respect_to), reverse=True)
+                    return sorted(products, key=lambda x: x.__class__._meta.model_name.startswith(with_respect_to),
+                                  reverse=True)
         return products
+
 
 class LatestProducts:
     objects = LatestProductsManager()
 
 
+class CategoryManager(models.Manager):
+
+    CATEGORY_NAME_COUNT_NAME = {
+        'Notebooks': 'notebook__count',
+        'Smartphones': 'smartphone__count'
+    }
+
+    def get_queryset(self):
+        return super().get_queryset()
+
+    def get_categories_for_left_sidebar(self):
+        models = get_models_for_count('notebook', 'smartphone')
+        qs = list(self.get_queryset().annotate(*models))
+        data = [
+            dict(name=c.name, url=c.get_absolute_url(), count=getattr(c, self.CATEGORY_NAME_COUNT_NAME[c.name]))
+            for c in qs
+        ]
+        return data
+
 class Category(models.Model):
     name = models.CharField(max_length=255, verbose_name='Name category')
     slug = models.SlugField(unique=True)
+    objects = CategoryManager()
 
     def __str__(self):
         return self.name
 
+    def get_absolute_url(self):
+        return reverse('category_detail', kwargs={'slug': self.slug})
+
 
 class Product(models.Model):
-
     VALID_RESOLUTION = (400, 400)
     MAX_RESOLUTION = (1000, 1000)
     MAX_IMAGE_SIZE = 3145728
@@ -74,7 +100,7 @@ class Product(models.Model):
     def __str__(self):
         return self.title
 
-    def save(self,*args,**kwargs):
+    def save(self, *args, **kwargs):
         image = self.image
         img = Image.open(image)
         min_height, min_width = self.VALID_RESOLUTION
@@ -90,7 +116,7 @@ class Product(models.Model):
         name_ = '{}.{}'.format(*self.image.name.split('.'))
         filestream.seek(0)
         self.image = InMemoryUploadedFile(
-            filestream,'ImageField', name_, 'jpeg/image', sys.getsizeof(filestream), None
+            filestream, 'ImageField', name_, 'jpeg/image', sys.getsizeof(filestream), None
         )
         super().save(*args, **kwargs)
 
@@ -128,6 +154,7 @@ class Customer(models.Model):
     def __str__(self):
         return "User: {} {}".format(self.user.first_name, self.user.last_name)
 
+
 class Notebook(Product):
     diagonal = models.CharField(max_length=255, verbose_name="Diagonal")
     display = models.CharField(max_length=255, verbose_name="Display type")
@@ -137,7 +164,7 @@ class Notebook(Product):
     time_without_charge = models.CharField(max_length=255, verbose_name="Working time")
 
     def __str__(self):
-        return  "{} : {}".format(self.category.name, self.title)
+        return "{} : {}".format(self.category.name, self.title)
 
     def get_absolute_url(self):
         return get_product_url(self, 'product_detail')
@@ -155,7 +182,7 @@ class Smartphone(Product):
     frontal_can_mp = models.CharField(max_length=255, verbose_name="Frontal camera")
 
     def __str__(self):
-        return  "{} : {}".format(self.category.name, self.title)
+        return "{} : {}".format(self.category.name, self.title)
 
     def get_absolute_url(self):
         return get_product_url(self, 'product_detail')
