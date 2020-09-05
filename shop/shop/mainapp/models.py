@@ -131,7 +131,7 @@ class CartProduct(models.Model):
     final_price = models.DecimalField(max_digits=9, decimal_places=2, verbose_name="Total price")
 
     def __str__(self):
-        return "Cart product {}".format(self.product.title)
+        return "Cart product {}".format(self.content_object.title)
 
 
 class Cart(models.Model):
