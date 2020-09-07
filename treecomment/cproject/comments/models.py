@@ -30,6 +30,13 @@ class Comment(models.Model):
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     timestamp = models.DateTimeField(auto_now=True, verbose_name='Date of creating')
+    is_child = models.BooleanField(default=False)
 
     def __str__(self):
         return str(self.id)
+
+    @property
+    def get_parent(self):
+        if not self.parent:
+            return ""
+        return self.parent
