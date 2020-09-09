@@ -13,7 +13,7 @@ def comments_filter(comments_list):
             </div>
         </ul>
         """
-    i = ""
+    i = ''
     for comment in comments_list:
         i += """
             <li>
